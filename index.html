@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מחשבון מס לבית אב</title>
+    <style>
+        /* Styling */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1e3c72, #2a5298); color: #333; direction: rtl; }
+        .container { width: 100%; max-width: 450px; padding: 20px; background-color: #fff; box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1); border-radius: 6px; }
+        h1 { text-align: center; margin-bottom: 15px; font-size: 1.6rem; color: #2a5298; }
+        .form-row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 12px; align-items: center; }
+        .form-group { flex: 1; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #333; }
+        input[type="number"] { width: 100%; padding: 8px; font-size: 0.9rem; border: 1px solid #ccc; border-radius: 4px; transition: border-color 0.3s; }
+        input[type="number"]:focus { border-color: #2a5298; outline: none; }
+        input#income { flex: 3; } /* Ensure the income field is larger */
+        button {
+    padding: 8px 15px;
+    font-size: 0.9rem;
+    color: #fff;
+    background-color: #2a5298;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    height: 35px;
+    margin-top: 20px;
+}
+
+        button:hover { background-color: #1e3c72; }
+        h2 { text-align: center; font-size: 1.4rem; margin: 15px 0; color: #333; }
+        .result { font-weight: bold; text-align: center; padding: 8px; border-radius: 4px; font-size: 1rem; margin-bottom: 8px; }
+        .positive { color: #1e7e34; }
+        .negative { color: #e3342f; }
+        .results-container { margin-top: 15px; padding: 12px; background-color: #f7f9fb; border-radius: 6px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); }
+        .results-container p { font-size: 0.9rem; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>מחשבון מס לבית אב</h1>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="adults">מספר הורים:</label>
+                <input type="number" id="adults" min="1" max="2">
+            </div>
+            <div class="form-group">
+                <label for="children">מספר ילדים:</label>
+                <input type="number" id="children" min="0" max="8">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="income">הכנסה נטו כוללת:</label>
+                <input type="number" id="income" min="0" max="99999999" placeholder="0">
+            </div>
+            <button onclick="runTaxCalculation()">חשב</button>
+        </div>
+        <div class="results-container">
+            <h2>תוצאות</h2>
+            <p>המודל הקיים: <span id="currentTax" class="result"></span> בחודש</p>
+            <p>המודל המדורג: <span id="progressiveTax" class="result"></span> בחודש</p>
+            <p>מודל האחוזים: <span id="percentageTax" class="result"></span> בחודש</p>
+            <p>הפרש (מדורג מול קיים): <span id="diffProgressive" class="result"></span></p>
+            <p>הפרש (אחוזים מול קיים): <span id="diffPercentage" class="result"></span></p>
+        </div>
+    </div>
+
+    <script>
+        function calculateNormalizedMembers(adults, children) {
+            const naturalPersons = adults + children;
+            let normalizedMembers;
+            if (naturalPersons === 1) { normalizedMembers = 1.3; }
+            else if (naturalPersons === 2) { normalizedMembers = 2; }
+            else if (naturalPersons === 3) { normalizedMembers = 2.7; }
+            else if (naturalPersons === 4) { normalizedMembers = 3.3; }
+            else if (naturalPersons === 5) { normalizedMembers = 3.8; }
+            else { normalizedMembers = 3.8 + (naturalPersons - 5) * 0.4; }
+            return normalizedMembers;
+        }
+
+        function applyTaxBrackets(incomePerPerson, brackets) {
+            let tax = 0;
+            for (let i = 0; i < brackets.length; i++) {
+                const bracket = brackets[i];
+                const previousMax = i > 0 ? brackets[i - 1].max : 0;
+                if (incomePerPerson > previousMax) {
+                    const taxableAmount = Math.min(incomePerPerson - previousMax, bracket.max - previousMax);
+                    tax += taxableAmount * bracket.rate;
+                }
+                if (incomePerPerson <= bracket.max) break;
+            }
+            return tax;
+        }
+
+        function currentModelTax(income, normalizedMembers, adults) {
+            income -= (adults === 1) ? 475 : 950;
+            let incomePerPerson = income / normalizedMembers;
+            incomePerPerson -= 2949;
+
+            const currentBrackets = [
+                { max: 454, rate: 0 },
+                { max: 904, rate: 0.05 },
+                { max: 1354, rate: 0.10 },
+                { max: 1804, rate: 0.15 },
+                { max: 2254, rate: 0.20 },
+                { max: 2704, rate: 0.25 },
+                { max: 3154, rate: 0.30 },
+                { max: 3604, rate: 0.35 },
+                { max: 4054, rate: 0.40 },
+                { max: 7810, rate: 0.45 }
+            ];
+
+            let taxPerPerson = applyTaxBrackets(incomePerPerson, currentBrackets);
+            let totalTax = taxPerPerson * normalizedMembers;
+
+            // Multiply by 0.66
+            totalTax *= 0.66;
+
+            const householdCap = adults === 2 ? 5000 : 3250;
+            totalTax = Math.min(totalTax, householdCap);
+            totalTax += (adults === 1) ? 475 : 950;
+
+            return Math.round(totalTax);
+        }
+
+        function progressiveModelTax(income, normalizedMembers, adults) {
+            income -= (adults === 1) ? 475 : 950;
+            let remainingIncome = income - normalizedMembers * 2949;
+            remainingIncome = Math.max(0, remainingIncome);
+
+            const progressiveBrackets = [
+                { max: 1100, rate: 0.06 },
+                { max: 2500, rate: 0.09 },
+                { max: 4400, rate: 0.12 },
+                { max: 7000, rate: 0.15 },
+                { max: 10500, rate: 0.18 },
+                { max: 16000, rate: 0.20 },
+                { max: 26200, rate: 0.22 }
+            ];
+
+            let tax = applyTaxBrackets(remainingIncome, progressiveBrackets);
+            let totalTax = tax;
+
+            const householdCap = adults === 2 ? 5000 : 2500;
+            totalTax = Math.min(totalTax, householdCap);
+            totalTax += (adults === 1) ? 475 : 950;
+
+            return Math.round(totalTax);
+        }
+
+        function percentageModelTax(income, adults) {
+            let tax = income * 0.07;
+
+            const householdCap = adults === 2 ? 5000 : 2500;
+            tax = Math.min(tax, householdCap);
+            tax += (adults === 1) ? 475 : 950;
+
+            return Math.round(tax);
+        }
+
+        function calculateTaxes(adults, children, income) {
+            const normalizedMembers = calculateNormalizedMembers(adults, children);
+            const currentTax = currentModelTax(income, normalizedMembers, adults);
+            const progressiveTax = progressiveModelTax(income, normalizedMembers, adults);
+            const percentageTax = percentageModelTax(income, adults);
+
+            const diffProgressive = progressiveTax - currentTax;
+            const diffPercentage = percentageTax - currentTax;
+
+            return {
+                currentTax,
+                progressiveTax,
+                percentageTax,
+                diffProgressive,
+                diffPercentage
+            };
+        }
+
+        function runTaxCalculation() {
+            const adults = parseInt(document.getElementById('adults').value, 10);
+            const children = parseInt(document.getElementById('children').value, 10);
+            const income = parseFloat(document.getElementById('income').value);
+
+            if (isNaN(adults) || isNaN(children) || isNaN(income)) {
+                alert("אנא הכנס מספרים תקינים עבור הורים, ילדים והכנסה.");
+                return;
+            }
+
+            const results = calculateTaxes(adults, children, income);
+
+            document.getElementById('currentTax').textContent = `${results.currentTax} NIS`;
+            document.getElementById('progressiveTax').textContent = `${results.progressiveTax} NIS`;
+            document.getElementById('percentageTax').textContent = `${results.percentageTax} NIS`;
+
+            const diffProgressive = document.getElementById('diffProgressive');
+            const diffPercentage = document.getElementById('diffPercentage');
+
+            diffProgressive.textContent = `${Math.abs(results.diffProgressive)} NIS ${results.diffProgressive > 0 ? "יותר בחודש" : "פחות בחודש"}`;
+            diffProgressive.className = results.diffProgressive > 0 ? 'result negative' : 'result positive';
+
+            diffPercentage.textContent = `${Math.abs(results.diffPercentage)} NIS ${results.diffPercentage > 0 ? "יותר בחודש" : "פחות בחודש"}`;
+            diffPercentage.className = results.diffPercentage > 0 ? 'result negative' : 'result positive';
+        }
+    </script>
+</body>
+</html>
